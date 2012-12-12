@@ -147,5 +147,5 @@ class RequirementsEventListener(sublime_plugin.EventListener):
     def on_load(self, view):
         if not requirements_view(view):
             return
-        view.set_syntax_file("Packages/requirementstxt/requirementstxt.tmLanguage")
+        view.set_syntax_file("Packages/requirements.txt/requirementstxt.tmLanguage")
 
