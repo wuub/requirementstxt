@@ -1,0 +1,14 @@
+name: requirements.txt
+scopeName: source.requirementstxt
+uuid: "7e773b70-991b-4bca-921c-e4c3f94e0630"
+patterns:
+- captures:
+   '1': {name: punctuation.definition.comment.requirementstxt}
+  match: (#).*$\n?
+  name: comment.line.requirementstxt
+- match: '(?i)^[a-z0-9_\-\.]+'
+  name: string.package_name.requirementstxt
+- match: '(?i)==|<|<=|>=|>'
+  name: keyword.operator.logical.punctuation.requirementstxt
+- match: '(?i)\d+\.[\da-z\-_\.]*'
+  name: constant.numeric.verions.requirementstxt

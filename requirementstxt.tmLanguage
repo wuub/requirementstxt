@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>name</key>
+	<string>requirements.txt</string>
+	<key>patterns</key>
+	<array>
+		<dict>
+			<key>captures</key>
+			<dict>
+				<key>1</key>
+				<dict>
+					<key>name</key>
+					<string>punctuation.definition.comment.requirementstxt</string>
+				</dict>
+			</dict>
+			<key>match</key>
+			<string>(#).*$\n?</string>
+			<key>name</key>
+			<string>comment.line.requirementstxt</string>
+		</dict>
+		<dict>
+			<key>match</key>
+			<string>(?i)^[a-z0-9_\-\.]+</string>
+			<key>name</key>
+			<string>string.package_name.requirementstxt</string>
+		</dict>
+		<dict>
+			<key>match</key>
+			<string>(?i)==|&lt;|&lt;=|&gt;=|&gt;</string>
+			<key>name</key>
+			<string>keyword.operator.logical.punctuation.requirementstxt</string>
+		</dict>
+		<dict>
+			<key>match</key>
+			<string>(?i)\d+\.[\da-z\-_\.]*</string>
+			<key>name</key>
+			<string>constant.numeric.verions.requirementstxt</string>
+		</dict>
+	</array>
+	<key>scopeName</key>
+	<string>source.requirementstxt</string>
+	<key>uuid</key>
+	<string>7e773b70-991b-4bca-921c-e4c3f94e0630</string>
+</dict>
+</plist>

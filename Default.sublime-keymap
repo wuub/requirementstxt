@@ -1,0 +1,20 @@
+[
+    {
+        "keys": ["alt+,"],
+        "command": "requirements_auto_version",
+        "args": {},
+        "context": [
+            {"key": "selector", "operator": "equal", "operand": "source.requirementstxt"}
+        ]
+    },
+    {
+        "keys": ["alt+shift+,"],
+        "command": "requirements_auto_version",
+        "args": {"strict": true},
+        "context": [
+            {"key": "selector", "operator": "equal", "operand": "source.requirementstxt"}
+        ]
+    }
+
+
+]
