@@ -44,7 +44,9 @@ def list_packages():
     cached = cache.get("--packages--", None)
     if cached:
         return cached
-    packages = [pkg.decode("utf-8") for pkg in xmlrpclib.ServerProxy(PIP_INDEX).list_packages()]
+    packages = xmlrpclib.ServerProxy(PIP_INDEX).list_packages()
+    if not isinstance(packages[0], unicode):
+        packages = [pkg.decode("utf-8") for pkg in packages]
     cache.set("--packages--", packages, ttl=5 * 60)
     return packages
 
