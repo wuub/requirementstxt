@@ -132,6 +132,7 @@ class RequirementsAutoVersion(sublime_plugin.TextCommand):
 
     def selected_lines(self):
         v = self.view
+        v.run_command("split_selection_into_lines")
         for sel in v.sel():
             for line in v.lines(sel):
                 yield line, v.substr(line)
