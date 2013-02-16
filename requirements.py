@@ -85,12 +85,16 @@ def _parse_version_parts(s):
     yield '*final'  # ensure that alpha/beta/candidate are before final
 
 
-def requirements_view(view):
+def requirements_file(view):
     fname = view.file_name()
     if not fname:
         return False
     basename = os.path.basename(fname)
     return basename == "requirements.txt"
+
+
+def requirements_view(view):
+    return "source.requirementstxt" in view.syntax_name(view.sel()[0].begin())
 
 
 class RequirementsAutoVersion(sublime_plugin.TextCommand):
@@ -148,7 +152,6 @@ class RequirementsEventListener(sublime_plugin.EventListener):
         return completions, sublime.INHIBIT_WORD_COMPLETIONS | sublime.INHIBIT_EXPLICIT_COMPLETIONS
 
     def on_load(self, view):
-        if not requirements_view(view):
+        if not requirements_file(view):
             return
         view.set_syntax_file("Packages/requirements.txt/requirementstxt.tmLanguage")
-
