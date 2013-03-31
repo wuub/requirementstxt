@@ -6,23 +6,32 @@ import re
 import os
 import os.path
 import time
-import xmlrpclib
 import sublime
 import sublime_plugin
-import ConfigParser
 
-
-PIP_INDEX = "http://pypi.python.org/pypi"  # xmlrpc
-PIP_INDEX = os.environ.get("PIP_INDEX", PIP_INDEX)
 try:
-    cp = ConfigParser.SafeConfigParser()
-    cp.read(os.path.expanduser("~/.pip/pip.conf"))
-    PIP_INDEX = cp.get("global", "index")
-except ConfigParser.Error:
-    pass  # just ignore
-settings = sublime.load_settings('requirementstxt.sublime-settings')
-PIP_INDEX = settings.get("pip_index", PIP_INDEX)
+    from xmlrpclib import ServerProxy
+    import ConfigParser as configparser
+    unicode_type = unicode
+except ImportError:
+    from xmlrpc.client import ServerProxy
+    import configparser
+    unicode_type = str
 
+
+def get_pip_index():
+    pip_index = "http://pypi.python.org/pypi"  # xmlrpc
+    pip_index = os.environ.get("PIP_INDEX", pip_index)
+    try:
+        cp = configparser.SafeConfigParser()
+        cp.read(os.path.expanduser("~/.pip/pip.conf"))
+        pip_index = cp.get("global", "index")
+    except configparser.Error:
+        pass  # just ignore
+    settings = sublime.load_settings('requirementstxt.sublime-settings')
+    pip_index = settings.get("pip_index", pip_index)
+    return pip_index
+    
 
 class SimpleCache(object):
     def __init__(self):
@@ -44,8 +53,8 @@ def list_packages():
     cached = cache.get("--packages--", None)
     if cached:
         return cached
-    packages = xmlrpclib.ServerProxy(PIP_INDEX).list_packages()
-    if not isinstance(packages[0], unicode):
+    packages = ServerProxy(get_pip_index()).list_packages()
+    if not isinstance(packages[0], unicode_type):
         packages = [pkg.decode("utf-8") for pkg in packages]
     cache.set("--packages--", packages, ttl=5 * 60)
     return packages
@@ -55,9 +64,9 @@ def releases(package_name):
     cached = cache.get(package_name)
     if cached:
         return cached
-    pypi = xmlrpclib.ServerProxy(PIP_INDEX)
+    pypi = ServerProxy(get_pip_index())
     rels = pypi.package_releases(package_name)
-    sorted_releases = sorted(rels, cmp=lambda a, b: cmp(tuple(_parse_version_parts(a)), tuple(_parse_version_parts(b))))
+    sorted_releases = sorted(rels, key=lambda a: tuple(_parse_version_parts(a)))
     cache.set(package_name, sorted_releases, ttl=2 * 60)
     return sorted_releases
 
@@ -94,7 +103,7 @@ def requirements_file(view):
 
 
 def requirements_view(view):
-    return "source.requirementstxt" in view.syntax_name(view.sel()[0].begin())
+    return "source.requirementstxt" in view.scope_name(view.sel()[0].begin())
 
 
 class RequirementsAutoVersion(sublime_plugin.TextCommand):
@@ -125,7 +134,7 @@ class RequirementsAutoVersion(sublime_plugin.TextCommand):
 
     def non_strict_version(self, most_recent):
         next_major = str(int(most_recent.split(".", 1)[0]) + 1)
-        next_version = ".".join([next_major] + map(lambda x: "0", most_recent.split(".")[1:]))
+        next_version = ".".join([next_major] + ["0" for x in most_recent.split(".")[1:]])
         return ">=%s,<%s" % (most_recent, next_version)
 
     def package_name(self, line):
@@ -154,4 +163,7 @@ class RequirementsEventListener(sublime_plugin.EventListener):
     def on_load(self, view):
         if not requirements_file(view):
             return
-        view.set_syntax_file("Packages/requirements.txt/requirementstxt.tmLanguage")
+        syntax_file = "Packages/requirements.txt/requirementstxt.tmLanguage"
+        if hasattr(sublime, "find_resources"):
+            syntax_file = sublime.find_resources("requirementstxt.tmLanguage")[0]
+        view.set_syntax_file(syntax_file)
