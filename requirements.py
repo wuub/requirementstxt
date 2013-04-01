@@ -21,12 +21,13 @@ except ImportError:
 
 
 def get_pip_index():
+    """return url of pypi xmlrpc endpoint"""
     pip_index = "http://pypi.python.org/pypi"  # xmlrpc
     pip_index = os.environ.get("PIP_INDEX", pip_index)
     try:
-        cp = configparser.SafeConfigParser()
-        cp.read(os.path.expanduser("~/.pip/pip.conf"))
-        pip_index = cp.get("global", "index")
+        parser = configparser.SafeConfigParser()
+        parser.read(os.path.expanduser("~/.pip/pip.conf"))
+        pip_index = parser.get("global", "index")
     except configparser.Error:
         pass  # just ignore
     settings = sublime.load_settings('requirementstxt.sublime-settings')
@@ -35,6 +36,8 @@ def get_pip_index():
     
 
 class SimpleCache(object):
+    """Dumb cache with TTL"""
+
     def __init__(self):
         self._dict = {}
 
@@ -47,53 +50,60 @@ class SimpleCache(object):
             return default
         return value
 
+    def clear(self):
+        self._dict.clear()
+
 
 class FakePackagesIndex(object):
     def __init__(self, url): 
         self._url = url
 
     def list_packages(self):
-        time.sleep(6.0)
+        time.sleep(3.0)
         return ["Flask", "Flask-SqlAlchemy", "Flask-WTF"]
 
     def package_releases(self, package_name):
-        time.sleep(2.0)
+        time.sleep(1.0)
         return ["1.1.1", "1.1.2"]
 
 
 def plugin_loaded():
+    """Monkeypatch ServerProxy for testing on plugin load"""
     if sublime.load_settings('requirementstxt.sublime-settings').get("debug", False):
         global ServerProxy
         ServerProxy = FakePackagesIndex
 
-cache = SimpleCache()
+CACHE = SimpleCache()
 
 
 def _fetch_packages():
+    """Does the actual package list fetch, returns a list of unicode names"""
+    sublime.status_message("requirements.txt: listing packages...")
     packages = ServerProxy(get_pip_index()).list_packages()
+    sublime.status_message("requirements.txt: got {}".format(len(packages)))
     if not isinstance(packages[0], unicode_type):
         packages = [pkg.decode("utf-8") for pkg in packages]
-    cache.set("--packages--", packages, ttl=5 * 60)
+    CACHE.set("--packages--", packages, ttl=5 * 60)
 
 
 def list_packages():
-    cached = cache.get("--packages--", None)
+    cached = CACHE.get("--packages--", None)
     if cached is not None:
         return cached
-    cache.set("--packages--", [], ttl=30)
-    t = threading.Thread(target=_fetch_packages)
-    t.start()
+    CACHE.set("--packages--", [], ttl=30)
+    threading.Thread(target=_fetch_packages).start()
     return []
 
 
 def releases(package_name):
-    cached = cache.get(package_name)
+    """Return sorted list of releases for given package name"""
+    cached = CACHE.get(package_name)
     if cached:
         return cached
     pypi = ServerProxy(get_pip_index())
     rels = pypi.package_releases(package_name)
     sorted_releases = sorted(rels, key=lambda a: tuple(_parse_version_parts(a)))
-    cache.set(package_name, sorted_releases, ttl=2 * 60)
+    CACHE.set(package_name, sorted_releases, ttl=2 * 60)
     return sorted_releases
 
 
@@ -130,6 +140,12 @@ def requirements_file(view):
 
 def requirements_view(view):
     return "source.requirementstxt" in view.scope_name(view.sel()[0].begin())
+
+
+class RequirementsClearCache(sublime_plugin.WindowCommand):
+    def run(self):
+        CACHE.clear()
+        sublime.status_message("requirements.txt: cache cleared")
 
 
 class RequirementsAutoVersion(sublime_plugin.TextCommand):
