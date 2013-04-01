@@ -6,6 +6,7 @@ import re
 import os
 import os.path
 import time
+import threading
 import sublime
 import sublime_plugin
 
@@ -46,18 +47,43 @@ class SimpleCache(object):
             return default
         return value
 
+
+class FakePackagesIndex(object):
+    def __init__(self, url): 
+        self._url = url
+
+    def list_packages(self):
+        time.sleep(6.0)
+        return ["Flask", "Flask-SqlAlchemy", "Flask-WTF"]
+
+    def package_releases(self, package_name):
+        time.sleep(2.0)
+        return ["1.1.1", "1.1.2"]
+
+
+def plugin_loaded():
+    if sublime.load_settings('requirementstxt.sublime-settings').get("debug", False):
+        global ServerProxy
+        ServerProxy = FakePackagesIndex
+
 cache = SimpleCache()
 
 
-def list_packages():
-    cached = cache.get("--packages--", None)
-    if cached:
-        return cached
+def _fetch_packages():
     packages = ServerProxy(get_pip_index()).list_packages()
     if not isinstance(packages[0], unicode_type):
         packages = [pkg.decode("utf-8") for pkg in packages]
     cache.set("--packages--", packages, ttl=5 * 60)
-    return packages
+
+
+def list_packages():
+    cached = cache.get("--packages--", None)
+    if cached is not None:
+        return cached
+    cache.set("--packages--", [], ttl=30)
+    t = threading.Thread(target=_fetch_packages)
+    t.start()
+    return []
 
 
 def releases(package_name):
@@ -157,6 +183,7 @@ class RequirementsEventListener(sublime_plugin.EventListener):
             return True
         packages = list_packages()
         lower_prefix = prefix.lower()
+
         completions = [(pkg, pkg) for pkg in packages if pkg.lower().startswith(lower_prefix)]
         return completions, sublime.INHIBIT_WORD_COMPLETIONS | sublime.INHIBIT_EXPLICIT_COMPLETIONS
 
