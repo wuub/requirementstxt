@@ -1,4 +1,4 @@
 {
-    "pip_index": "http://pypi.python.org/pypi",
+    // "pip_index": "http://pypi.python.org/pypi",
     "debug": false
 }
