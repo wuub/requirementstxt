@@ -33,7 +33,7 @@ def get_pip_index():
     settings = sublime.load_settings('requirementstxt.sublime-settings')
     pip_index = settings.get("pip_index", pip_index)
     return pip_index
-    
+
 
 class SimpleCache(object):
     """Dumb cache with TTL"""
@@ -55,7 +55,7 @@ class SimpleCache(object):
 
 
 class FakePackagesIndex(object):
-    def __init__(self, url): 
+    def __init__(self, url):
         self._url = url
 
     def list_packages(self):
@@ -206,7 +206,7 @@ class RequirementsEventListener(sublime_plugin.EventListener):
     def on_load(self, view):
         if not requirements_file(view):
             return
-        syntax_file = "Packages/requirements.txt/requirementstxt.tmLanguage"
+        syntax_file = "Packages/requirementstxt/requirementstxt.tmLanguage"
         if hasattr(sublime, "find_resources"):
             syntax_file = sublime.find_resources("requirementstxt.tmLanguage")[0]
         view.set_syntax_file(syntax_file)

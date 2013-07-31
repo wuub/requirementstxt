@@ -1,12 +1,12 @@
 requirements.txt
 ================
 
-Plugin for Sublime Text 2 providing autocompletion, syntax highlight and easy version management in requirements.txt files.
+Plugin for Sublime Text 2/3 providing autocompletion, syntax highlight and easy version management in requirements.txt files.
 
 Installation
 ============
 
-Install using Package Control or clone this repository into `Packages/requirements.txt` folder (note the dot)
+Install using Package Control or clone this repository into `Packages/requirementstxt` folder (WARNING: previously we used a dot in the package name here, but SublimeText3 changed the way it imports packages, and we need to fall back to ascii name)
 
 Usage
 =====
@@ -23,8 +23,8 @@ Screenshots
 ===========
 
 * ![](./doc/img/autocomplete.png) Autocomplete
-* ![](./doc/img/completed.png) Completed  
-* ![](./doc/img/soft_pin.png) Soft pinned `Alt+,` 
+* ![](./doc/img/completed.png) Completed
+* ![](./doc/img/soft_pin.png) Soft pinned `Alt+,`
 * ![](./doc/img/hard_pin.png) Hard pinned `Alt+Shift+,`
 * ![](./doc/img/selection.png) Multi-line selection
 * ![](./doc/img/selection_soft.png) Multi-line selection & `Alt+,`
