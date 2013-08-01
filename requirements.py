@@ -6,6 +6,8 @@ import re
 import os
 import os.path
 import time
+import pickle
+import functools
 import threading
 import sublime
 import sublime_plugin
@@ -62,9 +64,12 @@ class FakePackagesIndex(object):
         time.sleep(3.0)
         return ["Flask", "Flask-SqlAlchemy", "Flask-WTF"]
 
-    def package_releases(self, package_name):
+    def package_releases(self, package_name, show_hidden=False):
         time.sleep(1.0)
-        return ["1.1.1", "1.1.2"]
+        if show_hidden:
+            return ["1.1.1", "1.1.2"]
+        else:
+            return ["1.1.1"]
 
 
 def plugin_loaded():
@@ -124,16 +129,16 @@ def _parse_version_parts(s):
     yield '*final'  # ensure that alpha/beta/candidate are before final
 
 
-def releases(package_name, show_hidden=False):
+def releases(name, show_hidden=False):
     """Return sorted list of releases for given package name
        If show_hidden is set to true, returns all packages
     """
-    key = "{name}-{hidden}".format(name=package_name, hidden=show_hidden)
+    key = "{name}-{hidden}".format(name=name, hidden=show_hidden)
     cached = CACHE.get(key)
     if cached:
         return cached
     pypi = ServerProxy(get_pip_index())
-    rels = pypi.package_releases(package_name, True)
+    rels = pypi.package_releases(name, True)
     sorted_releases = sorted(rels, key=lambda a: tuple(_parse_version_parts(a)))
     CACHE.set(key, sorted_releases, ttl=2 * 60)
     return sorted_releases
@@ -188,6 +193,14 @@ def non_strict_version(version):
         return ">=%s,<%s" % (version, next_version)
 
 
+def selected_lines(view):
+    """Iterate over selected lines in given view"""
+    view.run_command("split_selection_into_lines")
+    for sel in view.sel():
+        for line in view.lines(sel):
+            yield line, view.substr(line)
+
+
 class RequirementsClearCache(sublime_plugin.WindowCommand):
     """Forced pypi cache clear"""
     def run(self):
@@ -202,7 +215,7 @@ class RequirementsAutoVersion(sublime_plugin.TextCommand):
 
         pkg_dict = list_packages()
 
-        for line_sel, line in self.selected_lines():
+        for line_sel, line in selected_lines(self.view):
             lower_pkg_name, extras = normalized_name(package_name(line))
             if lower_pkg_name not in pkg_dict:
                 continue
@@ -221,12 +234,46 @@ class RequirementsAutoVersion(sublime_plugin.TextCommand):
 
             self.view.replace(edit, line_sel, full_name + version_string)
 
-    def selected_lines(self):
-        v = self.view
-        v.run_command("split_selection_into_lines")
-        for sel in v.sel():
-            for line in v.lines(sel):
-                yield line, v.substr(line)
+
+class RequirementsReplaceLine(sublime_plugin.TextCommand):
+    def run(self, edit, line_sel, line_value):
+        # damn you ST3 ;)
+        self.view.replace(edit, pickle.loads(bytes(line_sel)), line_value)
+
+
+class RequirementsPromptVersion(sublime_plugin.TextCommand):
+    def run(self, edit, strict=False):
+        if not requirements_view(self.view):
+            return True
+
+        line_sel, line = next(selected_lines(self.view), (None, None))
+        if not line:
+            # either no selection or empty line
+            return
+
+        pkg_dict = list_packages()
+        lower_pkg_name, extras = normalized_name(package_name(line))
+        if lower_pkg_name not in pkg_dict:
+            return
+        real_name = pkg_dict[lower_pkg_name]
+        versions = list(reversed(releases(real_name)))
+
+        full_name = real_name
+        if extras:
+            full_name += "[{extras}]".format(extras=extras)
+
+        callback = functools.partial(self.on_done, full_name, line_sel, strict, versions)
+        self.view.show_popup_menu(versions, callback, 0)
+
+    def on_done(self, full_name, line_sel, strict, versions, picked_version):
+        if picked_version == -1:
+            return
+        version = versions[picked_version]
+        version_line = strict_version(version) if strict else non_strict_version(version)
+        self.view.run_command("requirements_replace_line", args={
+            "line_sel": pickle.dumps(line_sel),
+            "line_value": full_name + version_line
+        })
 
 
 class RequirementsEventListener(sublime_plugin.EventListener):
