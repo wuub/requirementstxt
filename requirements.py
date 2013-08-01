@@ -236,9 +236,9 @@ class RequirementsAutoVersion(sublime_plugin.TextCommand):
 
 
 class RequirementsReplaceLine(sublime_plugin.TextCommand):
-    def run(self, edit, line_sel, line_value):
+    def run(self, edit, line_value):
         # damn you ST3 ;)
-        self.view.replace(edit, pickle.loads(bytes(line_sel)), line_value)
+        self.view.replace(edit, self.view.line(self.view.sel()[0]), line_value)
 
 
 class RequirementsPromptVersion(sublime_plugin.TextCommand):
@@ -262,17 +262,17 @@ class RequirementsPromptVersion(sublime_plugin.TextCommand):
         if extras:
             full_name += "[{extras}]".format(extras=extras)
 
-        callback = functools.partial(self.on_done, full_name, line_sel, strict, versions)
-        self.view.show_popup_menu(versions, callback, 0)
+        ver_func = strict_version if strict else non_strict_version
+        choices = [full_name + ver_func(version) for version in versions]
 
-    def on_done(self, full_name, line_sel, strict, versions, picked_version):
-        if picked_version == -1:
+        callback = functools.partial(self.on_done, choices)
+        self.view.window().show_quick_panel(choices, callback, 0, 0)
+
+    def on_done(self, choices, picked):
+        if picked == -1:
             return
-        version = versions[picked_version]
-        version_line = strict_version(version) if strict else non_strict_version(version)
         self.view.run_command("requirements_replace_line", args={
-            "line_sel": pickle.dumps(line_sel),
-            "line_value": full_name + version_line
+            "line_value": choices[picked]
         })
 
 
