@@ -187,9 +187,13 @@ class RequirementsAutoVersion(sublime_plugin.TextCommand):
         return "==" + most_recent
 
     def non_strict_version(self, most_recent):
-        next_major = str(int(most_recent.split(".", 1)[0]) + 1)
-        next_version = ".".join([next_major] + ["0" for _ in most_recent.split(".")[1:]])
-        return ">=%s,<%s" % (most_recent, next_version)
+        try:
+            next_major = str(int(most_recent.split(".", 1)[0]) + 1)
+            next_version = ".".join([next_major] + ["0" for _ in most_recent.split(".")[1:]])
+        except:
+            return ">=%s" % (most_recent,)  # pytz ;-(
+        else:
+            return ">=%s,<%s" % (most_recent, next_version)
 
     def package_name(self, line):
         match = re.match("(.*?)[<=>].*", line)
