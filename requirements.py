@@ -95,18 +95,6 @@ def list_packages():
     return []
 
 
-def releases(package_name):
-    """Return sorted list of releases for given package name"""
-    cached = CACHE.get(package_name)
-    if cached:
-        return cached
-    pypi = ServerProxy(get_pip_index())
-    rels = pypi.package_releases(package_name)
-    sorted_releases = sorted(rels, key=lambda a: tuple(_parse_version_parts(a)))
-    CACHE.set(package_name, sorted_releases, ttl=2 * 60)
-    return sorted_releases
-
-
 ## Yanked from pkg_resources
 component_re = re.compile(r'(\d+ | [a-z]+ | \.| -)', re.VERBOSE)
 replace = {
@@ -130,7 +118,23 @@ def _parse_version_parts(s):
     yield '*final'  # ensure that alpha/beta/candidate are before final
 
 
+def releases(package_name, show_hidden=False):
+    """Return sorted list of releases for given package name
+       If show_hidden is set to true, returns all packages
+    """
+    key = "{name}-{hidden}".format(name=package_name, hidden=show_hidden)
+    cached = CACHE.get(key)
+    if cached:
+        return cached
+    pypi = ServerProxy(get_pip_index())
+    rels = pypi.package_releases(package_name, True)
+    sorted_releases = sorted(rels, key=lambda a: tuple(_parse_version_parts(a)))
+    CACHE.set(key, sorted_releases, ttl=2 * 60)
+    return sorted_releases
+
+
 def requirements_file(view):
+    """Return true if given view should be treated as requirements.txt file"""
     fname = view.file_name()
     if not fname:
         return False
@@ -143,17 +147,46 @@ def requirements_view(view):
 
 
 class RequirementsClearCache(sublime_plugin.WindowCommand):
+    """Forced pypi cache clear"""
     def run(self):
         CACHE.clear()
         sublime.status_message("requirements.txt: cache cleared")
 
 
+def package_name(line):
+    """Parse requirements.txt line and return package name
+       possibly with extras"""
+    match = re.match("(.*?)[<=>].*", line)
+    if not match:
+        return line
+    return match.group(1).strip()
+
+
 def normalized_name(package_line):
-    """Remove extras from package name"""
+    """Reurn lowercase package name and extras (unchanged) or None"""
     lower = package_line.lower()
     extras_match = re.search(r'\[(.*)\]', package_line)
     extras = extras_match.group(1) if extras_match else None
     return re.sub(r'\[.*\]', "", lower), extras
+
+
+def strict_version(version):
+    """Return a hard pinned version string"""
+    return "==" + version
+
+
+def non_strict_version(version):
+    """Where possible, return soft pinned pip version text,
+       while still keeping package in the current major release line.
+       If semver parsing fails for any reason, returns soft pinned
+       version without upper limit"""
+    try:
+        next_major = str(int(version.split(".", 1)[0]) + 1)
+        next_version = ".".join([next_major] + ["0" for _ in version.split(".")[1:]])
+    except:
+        return ">=%s" % (version,)  # pytz ;-(
+    else:
+        return ">=%s,<%s" % (version, next_version)
 
 
 class RequirementsAutoVersion(sublime_plugin.TextCommand):
@@ -165,7 +198,7 @@ class RequirementsAutoVersion(sublime_plugin.TextCommand):
         pkg_dict = dict(((name.lower(), name) for name in packages))
 
         for line_sel, line in self.selected_lines():
-            lower_pkg_name, extras = normalized_name(self.package_name(line))
+            lower_pkg_name, extras = normalized_name(package_name(line))
             if lower_pkg_name not in pkg_dict:
                 continue
             real_name = pkg_dict[lower_pkg_name]
@@ -175,31 +208,13 @@ class RequirementsAutoVersion(sublime_plugin.TextCommand):
             else:
                 full_name = real_name
 
-            most_recent = sorted_releases[-1]
+            version = sorted_releases[-1]
             if strict:
-                version_string = self.strict_version(most_recent)
+                version_string = strict_version(version)
             else:
-                version_string = self.non_strict_version(most_recent)
+                version_string = non_strict_version(version)
 
             self.view.replace(edit, line_sel, full_name + version_string)
-
-    def strict_version(self, most_recent):
-        return "==" + most_recent
-
-    def non_strict_version(self, most_recent):
-        try:
-            next_major = str(int(most_recent.split(".", 1)[0]) + 1)
-            next_version = ".".join([next_major] + ["0" for _ in most_recent.split(".")[1:]])
-        except:
-            return ">=%s" % (most_recent,)  # pytz ;-(
-        else:
-            return ">=%s,<%s" % (most_recent, next_version)
-
-    def package_name(self, line):
-        match = re.match("(.*?)[<=>].*", line)
-        if not match:
-            return line
-        return match.group(1).strip()
 
     def selected_lines(self):
         v = self.view
