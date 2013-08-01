@@ -83,16 +83,22 @@ def _fetch_packages():
     sublime.status_message("requirements.txt: got {count}".format(count=len(packages)))
     if not isinstance(packages[0], unicode_type):
         packages = [pkg.decode("utf-8") for pkg in packages]
-    CACHE.set("--packages--", packages, ttl=5 * 60)
+
+    pkg_dict = dict(((name.lower(), name) for name in packages))
+    CACHE.set("--packages--", pkg_dict, ttl=5 * 60)
 
 
 def list_packages():
+    """Return a DICT of lowercase_name -> CaseSensitive_Name of packages
+       available on get_pip_index() server"""
     cached = CACHE.get("--packages--", None)
     if cached is not None:
         return cached
-    CACHE.set("--packages--", [], ttl=30)
+    # thread has 30 seconds to get packages, otherwise cache will
+    # timeout and next thread will be spawned
+    CACHE.set("--packages--", {}, ttl=30)
     threading.Thread(target=_fetch_packages).start()
-    return []
+    return {}
 
 
 ## Yanked from pkg_resources
@@ -146,13 +152,6 @@ def requirements_view(view):
     return "source.requirementstxt" in view.scope_name(view.sel()[0].begin())
 
 
-class RequirementsClearCache(sublime_plugin.WindowCommand):
-    """Forced pypi cache clear"""
-    def run(self):
-        CACHE.clear()
-        sublime.status_message("requirements.txt: cache cleared")
-
-
 def package_name(line):
     """Parse requirements.txt line and return package name
        possibly with extras"""
@@ -189,13 +188,19 @@ def non_strict_version(version):
         return ">=%s,<%s" % (version, next_version)
 
 
+class RequirementsClearCache(sublime_plugin.WindowCommand):
+    """Forced pypi cache clear"""
+    def run(self):
+        CACHE.clear()
+        sublime.status_message("requirements.txt: cache cleared")
+
+
 class RequirementsAutoVersion(sublime_plugin.TextCommand):
     def run(self, edit, strict=False):
         if not requirements_view(self.view):
             return True
 
-        packages = list_packages()
-        pkg_dict = dict(((name.lower(), name) for name in packages))
+        pkg_dict = list_packages()
 
         for line_sel, line in self.selected_lines():
             lower_pkg_name, extras = normalized_name(package_name(line))
@@ -228,10 +233,10 @@ class RequirementsEventListener(sublime_plugin.EventListener):
     def on_query_completions(self, view, prefix, locations):
         if not requirements_view(view):
             return True
-        packages = list_packages()
+        pkg_dict = list_packages()
         lower_prefix = prefix.lower()
 
-        completions = [(pkg, pkg) for pkg in packages if pkg.lower().startswith(lower_prefix)]
+        completions = [(pkg, pkg) for lower_name, pkg in pkg_dict.items() if lower_name.startswith(lower_prefix)]
         return completions, sublime.INHIBIT_WORD_COMPLETIONS | sublime.INHIBIT_EXPLICIT_COMPLETIONS
 
     def on_load(self, view):
