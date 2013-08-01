@@ -271,7 +271,7 @@ class RequirementsPromptVersion(sublime_plugin.TextCommand):
     def on_done(self, choices, picked):
         if picked == -1:
             return
-        self.view.run_command("requirements_replace_line", args={
+        self.view.run_command("requirements_replace_line", {
             "line_value": choices[picked]
         })
 
