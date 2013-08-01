@@ -80,7 +80,7 @@ def _fetch_packages():
     """Does the actual package list fetch, returns a list of unicode names"""
     sublime.status_message("requirements.txt: listing packages...")
     packages = ServerProxy(get_pip_index()).list_packages()
-    sublime.status_message("requirements.txt: got {}".format(len(packages)))
+    sublime.status_message("requirements.txt: got {count}".format(count=len(packages)))
     if not isinstance(packages[0], unicode_type):
         packages = [pkg.decode("utf-8") for pkg in packages]
     CACHE.set("--packages--", packages, ttl=5 * 60)
@@ -148,6 +148,14 @@ class RequirementsClearCache(sublime_plugin.WindowCommand):
         sublime.status_message("requirements.txt: cache cleared")
 
 
+def normalized_name(package_line):
+    """Remove extras from package name"""
+    lower = package_line.lower()
+    extras_match = re.search(r'\[(.*)\]', package_line)
+    extras = extras_match.group(1) if extras_match else None
+    return re.sub(r'\[.*\]', "", lower), extras
+
+
 class RequirementsAutoVersion(sublime_plugin.TextCommand):
     def run(self, edit, strict=False):
         if not requirements_view(self.view):
@@ -157,11 +165,15 @@ class RequirementsAutoVersion(sublime_plugin.TextCommand):
         pkg_dict = dict(((name.lower(), name) for name in packages))
 
         for line_sel, line in self.selected_lines():
-            lower_pkg_name = self.package_name(line).lower()
+            lower_pkg_name, extras = normalized_name(self.package_name(line))
             if lower_pkg_name not in pkg_dict:
                 continue
             real_name = pkg_dict[lower_pkg_name]
             sorted_releases = releases(real_name)
+            if extras:
+                full_name = "{name}[{extras}]".format(name=real_name, extras=extras)
+            else:
+                full_name = real_name
 
             most_recent = sorted_releases[-1]
             if strict:
@@ -169,14 +181,14 @@ class RequirementsAutoVersion(sublime_plugin.TextCommand):
             else:
                 version_string = self.non_strict_version(most_recent)
 
-            self.view.replace(edit, line_sel, real_name + version_string)
+            self.view.replace(edit, line_sel, full_name + version_string)
 
     def strict_version(self, most_recent):
         return "==" + most_recent
 
     def non_strict_version(self, most_recent):
         next_major = str(int(most_recent.split(".", 1)[0]) + 1)
-        next_version = ".".join([next_major] + ["0" for x in most_recent.split(".")[1:]])
+        next_version = ".".join([next_major] + ["0" for _ in most_recent.split(".")[1:]])
         return ">=%s,<%s" % (most_recent, next_version)
 
     def package_name(self, line):
