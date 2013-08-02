@@ -1,0 +1,7 @@
+=======================
+requirements.txt  0.2.0
+=======================
+
+Changelog:
+  - BUGFIX: core rewritten to make it work on OSX+ST2 and Linux+ST2 2.0.2,
+  - NEW: Alt+. and Alt+Shift+. let you choose specific version

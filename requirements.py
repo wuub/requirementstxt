@@ -160,6 +160,8 @@ def _parse_version_parts(s):
 
 
 def _releases(name, show_hidden=False):
+    """Because ServerProxy().package_releases() is soooo f*$& broken
+       under different ST2/3 + osx/windows/linux configurations"""
     template = '''<?xml version='1.0'?>\n<methodCall>\n<methodName>package_releases</methodName>\n<params>\n<param>\n<value><string>{name}</string></value>\n</param>\n<param>\n<value><boolean>{flag}</boolean></value>\n</param>\n</params>\n</methodCall>\n'''
     flag = 1 if show_hidden else 0
     payload = template.format(name=name, flag=flag).encode("utf-8")
