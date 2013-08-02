@@ -2,5 +2,5 @@
     {
         "caption": "requirements.txt: Clear Cache",
         "command": "requirements_clear_cache", "args": {}
-    },
+    }
 ]
