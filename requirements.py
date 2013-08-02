@@ -14,11 +14,13 @@ import sublime_plugin
 try:
     from xmlrpclib import ServerProxy
     import ConfigParser as configparser
+    from urllib2 import Request, urlopen
     unicode_type = unicode
     PY2 = True
 except ImportError:
     from xmlrpc.client import ServerProxy
     import configparser
+    from urllib.request import Request, urlopen
     unicode_type = str
     PY2 = False
 
@@ -157,6 +159,18 @@ def _parse_version_parts(s):
     yield '*final'  # ensure that alpha/beta/candidate are before final
 
 
+def _releases(name, show_hidden=False):
+    template = '''<?xml version='1.0'?>\n<methodCall>\n<methodName>package_releases</methodName>\n<params>\n<param>\n<value><string>{name}</string></value>\n</param>\n<param>\n<value><boolean>{flag}</boolean></value>\n</param>\n</params>\n</methodCall>\n'''
+    flag = 1 if show_hidden else 0
+    payload = template.format(name=name, flag=flag).encode("utf-8")
+    req = Request(get_pip_index(), data=payload, headers={"Content-Type": "text/xml"})
+    result = urlopen(req).read().decode("utf-8")
+    if "<fault>" in result:
+        return []
+    matches = re.findall("<string>(.+?)</string>", result)
+    return matches
+
+
 def releases(name, show_hidden=False):
     """Return sorted list of releases for given package name
        If show_hidden is set to true, returns all packages
@@ -165,8 +179,7 @@ def releases(name, show_hidden=False):
     cached = CACHE.get(key)
     if cached:
         return cached
-    pypi = ServerProxy(get_pip_index())
-    rels = pypi.package_releases(name, True)
+    rels = _releases(name, show_hidden)
     sorted_releases = sorted(rels, key=lambda a: tuple(_parse_version_parts(a)))
     CACHE.set(key, sorted_releases, ttl=2 * 60)
     return sorted_releases
@@ -284,7 +297,7 @@ class RequirementsPromptVersion(sublime_plugin.TextCommand):
         if lower_pkg_name not in pkg_dict:
             return
         real_name = pkg_dict[lower_pkg_name]
-        versions = list(reversed(releases(real_name)))
+        versions = list(reversed(releases(real_name, True)))
 
         full_name = real_name
         if extras:
