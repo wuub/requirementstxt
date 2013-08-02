@@ -6,7 +6,6 @@ import re
 import os
 import os.path
 import time
-import pickle
 import functools
 import threading
 import sublime
@@ -16,15 +15,49 @@ try:
     from xmlrpclib import ServerProxy
     import ConfigParser as configparser
     unicode_type = unicode
+    PY2 = True
 except ImportError:
     from xmlrpc.client import ServerProxy
     import configparser
     unicode_type = str
+    PY2 = False
+
+CACHE = None
+SETTINGS = None
+SETTINGS_PIP_INDEX = None
+
+def plugin_loaded():
+    """Monkeypatch ServerProxy for testing on plugin load"""
+    global CACHE, SETTINGS, SETTINGS_PIP_INDEX
+    CACHE = SimpleCache()
+
+    ## meh, get around st2 + osx threading problems
+    SETTINGS = sublime.load_settings('requirementstxt.sublime-settings')
+    SETTINGS_PIP_INDEX = SETTINGS.get("pip_index", None)
+
+    def update_global():
+        global SETTINGS_PIP_INDEX
+        SETTINGS_PIP_INDEX = SETTINGS.get("pip_index", None)
+    SETTINGS.add_on_change("pip_index", update_global)
+
+    if SETTINGS.get("debug", False):
+        global ServerProxy
+        ServerProxy = FakePackagesIndex
 
 
 def get_pip_index():
     """return url of pypi xmlrpc endpoint"""
-    pip_index = "http://pypi.python.org/pypi"  # xmlrpc
+    if PY2 and sublime.platform() == "osx":
+        ## DON'T EVEN THINK about changing this back to http
+        ## somehow http transport is broken on py2.6.7/osx
+        pip_index = "https://pypi.python.org/pypi"  # xmlrpc
+    else:
+        ## AND GUESS WHAT happens on other configurations if you try to use https?
+        ## NotImplementedError: your version of http.client doesn't support HTTPS
+        ## AAAARRRGGHHHHSHSHSHSSSS someone should be paying me good money for
+        ## this stuff
+        pip_index = "http://pypi.python.org/pypi"  # xmlrpc
+
     pip_index = os.environ.get("PIP_INDEX", pip_index)
     try:
         parser = configparser.SafeConfigParser()
@@ -32,8 +65,8 @@ def get_pip_index():
         pip_index = parser.get("global", "index")
     except configparser.Error:
         pass  # just ignore
-    settings = sublime.load_settings('requirementstxt.sublime-settings')
-    pip_index = settings.get("pip_index", pip_index)
+
+    pip_index = SETTINGS_PIP_INDEX or pip_index
     return pip_index
 
 
@@ -72,20 +105,16 @@ class FakePackagesIndex(object):
             return ["1.1.1"]
 
 
-def plugin_loaded():
-    """Monkeypatch ServerProxy for testing on plugin load"""
-    if sublime.load_settings('requirementstxt.sublime-settings').get("debug", False):
-        global ServerProxy
-        ServerProxy = FakePackagesIndex
-
-CACHE = SimpleCache()
+def status_message(msg):
+    """Workaround for osx run_on_main_thread problem"""
+    sublime.set_timeout(functools.partial(sublime.status_message, msg), 0)
 
 
 def _fetch_packages():
     """Does the actual package list fetch, returns a list of unicode names"""
-    sublime.status_message("requirements.txt: listing packages...")
+    status_message("requirements.txt: listing packages...")
     packages = ServerProxy(get_pip_index()).list_packages()
-    sublime.status_message("requirements.txt: got {count}".format(count=len(packages)))
+    status_message("requirements.txt: got {count}".format(count=len(packages)))
     if not isinstance(packages[0], unicode_type):
         packages = [pkg.decode("utf-8") for pkg in packages]
 
@@ -115,7 +144,6 @@ replace = {
     'rc': 'c',
     'dev': '@'
 }
-
 
 def _parse_version_parts(s):
     for part in component_re.split(s):
@@ -293,3 +321,8 @@ class RequirementsEventListener(sublime_plugin.EventListener):
         if hasattr(sublime, "find_resources"):
             syntax_file = sublime.find_resources("requirementstxt.tmLanguage")[0]
         view.set_syntax_file(syntax_file)
+
+
+if PY2:
+    plugin_loaded()
+
