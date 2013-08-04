@@ -12,13 +12,11 @@ import sublime
 import sublime_plugin
 
 try:
-    from xmlrpclib import ServerProxy
     import ConfigParser as configparser
     from urllib2 import Request, urlopen
     unicode_type = unicode
     PY2 = True
 except ImportError:
-    from xmlrpc.client import ServerProxy
     import configparser
     from urllib.request import Request, urlopen
     unicode_type = str
@@ -29,7 +27,6 @@ SETTINGS = None
 SETTINGS_PIP_INDEX = None
 
 def plugin_loaded():
-    """Monkeypatch ServerProxy for testing on plugin load"""
     global CACHE, SETTINGS, SETTINGS_PIP_INDEX
     CACHE = SimpleCache()
 
@@ -41,10 +38,6 @@ def plugin_loaded():
         global SETTINGS_PIP_INDEX
         SETTINGS_PIP_INDEX = SETTINGS.get("pip_index", None)
     SETTINGS.add_on_change("pip_index", update_global)
-
-    if SETTINGS.get("debug", False):
-        global ServerProxy
-        ServerProxy = FakePackagesIndex
 
 
 def get_pip_index():
@@ -91,22 +84,6 @@ class SimpleCache(object):
         self._dict.clear()
 
 
-class FakePackagesIndex(object):
-    def __init__(self, url):
-        self._url = url
-
-    def list_packages(self):
-        time.sleep(3.0)
-        return ["Flask", "Flask-SqlAlchemy", "Flask-WTF"]
-
-    def package_releases(self, package_name, show_hidden=False):
-        time.sleep(1.0)
-        if show_hidden:
-            return ["1.1.1", "1.1.2"]
-        else:
-            return ["1.1.1"]
-
-
 def status_message(msg):
     """Workaround for osx run_on_main_thread problem"""
     sublime.set_timeout(functools.partial(sublime.status_message, msg), 0)
@@ -115,7 +92,13 @@ def status_message(msg):
 def _fetch_packages():
     """Does the actual package list fetch, returns a list of unicode names"""
     status_message("requirements.txt: listing packages...")
-    packages = ServerProxy(get_pip_index()).list_packages()
+    query = b'''<?xml version='1.0'?>\n<methodCall>\n<methodName>list_packages</methodName>\n<params></params>\n</methodCall>\n'''
+    req = Request(get_pip_index(), data=query, headers={"Content-Type": "text/xml"})
+    result = urlopen(req).read().decode("utf-8")
+    if "<fault>" in result:
+        packages = []
+    else:
+        packages = re.findall("<string>(.+?)</string>", result)
     status_message("requirements.txt: got {count}".format(count=len(packages)))
     if not isinstance(packages[0], unicode_type):
         packages = [pkg.decode("utf-8") for pkg in packages]
