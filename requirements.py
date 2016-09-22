@@ -11,58 +11,9 @@ import threading
 import sublime
 import sublime_plugin
 
-try:
-    import ConfigParser as configparser
-    from urllib2 import Request, urlopen
-    unicode_type = unicode
-    PY2 = True
-except ImportError:
-    import configparser
-    from urllib.request import Request, urlopen
-    unicode_type = str
-    PY2 = False
-
-CACHE = None
-SETTINGS = None
-SETTINGS_PIP_INDEX = None
-
-def plugin_loaded():
-    global CACHE, SETTINGS, SETTINGS_PIP_INDEX
-    CACHE = SimpleCache()
-
-    ## meh, get around st2 + osx threading problems
-    SETTINGS = sublime.load_settings('requirementstxt.sublime-settings')
-    SETTINGS_PIP_INDEX = SETTINGS.get("pip_index", None)
-
-    def update_global():
-        global SETTINGS_PIP_INDEX
-        SETTINGS_PIP_INDEX = SETTINGS.get("pip_index", None)
-    SETTINGS.add_on_change("pip_index", update_global)
-
-
-def get_pip_index():
-    """return url of pypi xmlrpc endpoint"""
-    if PY2 and sublime.platform() == "osx":
-        ## DON'T EVEN THINK about changing this back to http
-        ## somehow http transport is broken on py2.6.7/osx
-        pip_index = "https://pypi.python.org/pypi"  # xmlrpc
-    else:
-        ## AND GUESS WHAT happens on other configurations if you try to use https?
-        ## NotImplementedError: your version of http.client doesn't support HTTPS
-        ## AAAARRRGGHHHHSHSHSHSSSS someone should be paying me good money for
-        ## this stuff
-        pip_index = "http://pypi.python.org/pypi"  # xmlrpc
-
-    pip_index = os.environ.get("PIP_INDEX", pip_index)
-    try:
-        parser = configparser.SafeConfigParser()
-        parser.read(os.path.expanduser("~/.pip/pip.conf"))
-        pip_index = parser.get("global", "index")
-    except configparser.Error:
-        pass  # just ignore
-
-    pip_index = SETTINGS_PIP_INDEX or pip_index
-    return pip_index
+import configparser
+from urllib.request import Request, urlopen
+unicode_type = str
 
 
 class SimpleCache(object):
@@ -82,6 +33,26 @@ class SimpleCache(object):
 
     def clear(self):
         self._dict.clear()
+
+
+CACHE = SimpleCache()
+
+
+def get_pip_index():
+    """return url of pypi xmlrpc endpoint"""
+    settings = sublime.load_settings('requirementstxt.sublime-settings')
+    pip_index = "https://pypi.python.org/pypi"  # xmlrpc
+
+    pip_index = os.environ.get("PIP_INDEX", pip_index)
+    try:
+        parser = configparser.SafeConfigParser()
+        parser.read(os.path.expanduser("~/.pip/pip.conf"))
+        pip_index = parser.get("global", "index")
+    except configparser.Error:
+        pass  # just ignore
+
+    pip_index = settings.get("pip_index", pip_index)
+    return pip_index
 
 
 def status_message(msg):
@@ -324,8 +295,3 @@ class RequirementsEventListener(sublime_plugin.EventListener):
         if hasattr(sublime, "find_resources"):
             syntax_file = sublime.find_resources("requirementstxt.tmLanguage")[0]
         view.set_syntax_file(syntax_file)
-
-
-if PY2:
-    plugin_loaded()
-
