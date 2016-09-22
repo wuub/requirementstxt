@@ -1,0 +1,18 @@
+{
+    "schema_version": "3.0.0",
+    "packages": {
+        "name": "requirementstxt",
+        "details": "https://github.com/wuub/requirementstxt",
+        "description": "requirements.txt support for Python",
+        "releases": [
+            {
+                "sublime_text": "<3120",
+                "tags": "st2-"
+            },
+            {
+                "sublime_text": ">3120",
+                "tags": "st3-"
+            }
+        ]
+    }
+}
