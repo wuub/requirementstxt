@@ -1,6 +1,6 @@
 {
     "schema_version": "3.0.0",
-    "packages": {
+    "packages": [{
         "name": "requirementstxt",
         "details": "https://github.com/wuub/requirementstxt",
         "description": "requirements.txt support for Python",
@@ -14,5 +14,5 @@
                 "tags": "st3-"
             }
         ]
-    }
+    }]
 }
